@@ -31,7 +31,7 @@ if 'last_result' not in st.session_state:
 st.title('AI Text Detector')
 
 with st.sidebar:
-    st.title('🧠 Detector Toolkit')
+    st.title('Detector Toolkit')
     st.caption('Tune options, explore samples, and review the latest verdict.')
     st.divider()
 
@@ -60,10 +60,10 @@ with st.sidebar:
     st.caption('Samples are editable once loaded into the main editor.')
 
     with st.expander('Scoring cheat sheet'):
-        st.write('- 60% — GPT-2 perplexity (if available)')
-        st.write('- 15% — Repetition of trigram phrases')
-        st.write('- 10% — Ratio of short connective words')
-        st.write('- 15% — Punctuation density and variety')
+        st.write('- 60% - GPT-2 perplexity (if available)')
+        st.write('- 15% - Repetition of trigram phrases')
+        st.write('- 10% - Ratio of short connective words')
+        st.write('- 15% - Punctuation density and variety')
 
     last = st.session_state.get('last_result')
     if last:
