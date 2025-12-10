@@ -106,6 +106,12 @@ def stylometric_features(text: str) -> Dict[str, float]:
     # stopword-ish short word ratio (simple heuristic)
     short_word_ratio = sum(1 for w in words if len(w) <= 3) / max(1, len(words))
 
+    type_token_ratio = len(set(tokens)) / max(1, len(tokens))
+    uppercase_ratio = sum(1 for ch in text if ch.isupper()) / max(1, len(text))
+    digit_ratio = sum(1 for ch in text if ch.isdigit()) / max(1, len(text))
+    sentence_lengths = [len(re.findall(r"\w+", s)) for s in sentences] if sentences else []
+    sentence_len_std = float(np.std(sentence_lengths)) if sentence_lengths else 0.0
+
     return {
         'avg_word_len': avg_word_len,
         'avg_sentence_len': avg_sentence_len,
@@ -114,6 +120,10 @@ def stylometric_features(text: str) -> Dict[str, float]:
         'short_word_ratio': short_word_ratio,
         'num_words': len(words),
         'num_sentences': len(sentences),
+        'type_token_ratio': type_token_ratio,
+        'uppercase_ratio': uppercase_ratio,
+        'digit_ratio': digit_ratio,
+        'sentence_len_std': sentence_len_std,
     }
 
 
@@ -134,38 +144,54 @@ def detect_ai(text: str, use_gpt2: bool = True) -> Dict[str, Any]:
         except Exception:
             ppx = float('nan')
 
-    # Heuristic mapping: lower perplexity tends toward AI (not always true)
+    # Heuristic mapping: lower perplexity and more uniform/templated stylometrics increase AI-likelihood.
     score_parts = []
 
     # perplexity score
     if not math.isnan(ppx):
         # map ppx to 0..1 where lower ppx -> closer to 1 (AI)
-        # clamp between 10 and 1000
         p = max(10.0, min(1000.0, ppx))
         ppx_score = (200.0 - p) / 200.0  # p=200 -> 0
         ppx_score = max(-1.0, min(1.0, ppx_score))
         ppx_score = (ppx_score + 1) / 2.0  # normalize to 0..1
-        score_parts.append(('ppx', ppx_score, 0.6))
-    else:
-        # fallback: no ppx
-        pass
+        score_parts.append(('ppx', ppx_score, 0.45))
 
     # repetition: higher repetition -> more likely AI
     rep = features['rep_rate']
     rep_score = min(1.0, rep * 5.0)
-    score_parts.append(('rep', rep_score, 0.15))
+    score_parts.append(('rep', rep_score, 0.12))
 
     # short sentences & short word ratio: AI sometimes has more uniform short words
     short_ratio = features['short_word_ratio']
     short_score = max(0.0, (short_ratio - 0.35) / 0.35)
     short_score = min(1.0, short_score)
-    score_parts.append(('short', short_score, 0.1))
+    score_parts.append(('short', short_score, 0.08))
 
     # punctuation: lower punctuation ratio -> more likely AI (heuristic)
     punct = features['punct_ratio']
-    punct_score = 1.0 - min(0.05, punct) / 0.05 if punct >= 0 else 0.0
     punct_score = max(0.0, min(1.0, 1.0 - (punct / 0.03)))
-    score_parts.append(('punct', punct_score, 0.15))
+    score_parts.append(('punct', punct_score, 0.08))
+
+    # type-token ratio: low diversity => more templated => AI-like
+    ttr = features['type_token_ratio']
+    ttr_score = max(0.0, (0.5 - ttr) / 0.5)
+    ttr_score = min(1.0, ttr_score)
+    score_parts.append(('type_token', ttr_score, 0.12))
+
+    # uppercase ratio: lots of caps -> more human/editorial
+    upper = features['uppercase_ratio']
+    upper_score = max(0.0, 1.0 - min(upper / 0.1, 1.0))
+    score_parts.append(('uppercase', upper_score, 0.05))
+
+    # sentence length variance: low variance can indicate templated generations
+    sent_std = features['sentence_len_std']
+    std_score = max(0.0, 1.0 - min(sent_std / 25.0, 1.0))
+    score_parts.append(('sent_len_std', std_score, 0.05))
+
+    # average word length: very short average can correlate with simpler generated text
+    avg_word_len = features['avg_word_len']
+    avg_word_score = max(0.0, min(1.0, (6.0 - avg_word_len) / 6.0))
+    score_parts.append(('avg_word_len', avg_word_score, 0.05))
 
     # Combine weighted scores
     total_weight = sum(w for _, _, w in score_parts)
@@ -174,8 +200,12 @@ def detect_ai(text: str, use_gpt2: bool = True) -> Dict[str, Any]:
         combined += s * w
     combined = combined / max(1e-9, total_weight)
 
-    # Map combined to probability 0..1
+    # Adjust probability for extremely short texts
     probability = float(max(0.0, min(1.0, combined)))
+    if features['num_words'] < 20:
+        probability *= 0.75
+    elif features['num_words'] < 40:
+        probability *= 0.9
 
     if probability >= 0.75:
         label = 'Likely AI'
