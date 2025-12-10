@@ -12,6 +12,7 @@ This project provides a lightweight text forensics dashboard that blends fast st
 | `.gitignore`           | Keeps venvs, caches, editor folders, and artefacts out of git. |
 | `push_to_github.bat`   | Windows helper script that configures git identity and pushes to a remote. |
 | `docs/ARCHITECTURE.md` | Software design notes, heuristics, and extension guidelines. |
+| `docs/WORKFLOW.md`     | Day-to-day engineering workflow, testing, calibration, and deployment steps. |
 
 ## Quick start (local)
 
