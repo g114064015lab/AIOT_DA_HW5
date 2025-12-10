@@ -18,6 +18,21 @@ SAMPLE_TEXTS = {
         'Sunlight spilled across the workshop bench, catching dust motes in the air as the '
         'prototype drone hummed awake for its first autonomous test flight.'
     ),
+    'AI-style repetitive': (
+        'AI systems will optimize operations and generate insights rapidly. AI systems will '
+        'optimize operations and generate insights rapidly while maintaining consistency across outputs.'
+    ),
+    'Formal technical': (
+        'The model produces coherent paragraphs by following a fixed outline, repeating transitions '
+        'and preserving uniform sentence length while minimizing stylistic deviation.'
+    ),
+    'Journalistic human': (
+        'After three hours of debate, the council narrowly approved the waterfront plan, prompting '
+        'cheers from local shop owners and a cautious nod from the mayor.'
+    ),
+    'Casual human note': (
+        'Thanks for the slides! I will tweak the colors tonight and send you a draft before our morning standup.'
+    ),
 }
 
 
