@@ -200,16 +200,21 @@ def detect_ai(text: str, use_gpt2: bool = True) -> Dict[str, Any]:
         combined += s * w
     combined = combined / max(1e-9, total_weight)
 
-    # Adjust probability for extremely short texts
+    # Adjust probability: lightly penalize short text but also add a small bias to avoid all scores clustering low.
     probability = float(max(0.0, min(1.0, combined)))
     if features['num_words'] < 20:
-        probability *= 0.75
+        probability *= 0.85
     elif features['num_words'] < 40:
-        probability *= 0.9
+        probability *= 0.93
+    elif features['num_words'] > 60:
+        probability *= 1.05
 
-    if probability >= 0.75:
+    # calibration bias to lift mid-scores for AI-ish stylistic patterns
+    probability = min(1.0, 0.3 + probability * 0.9)
+
+    if probability >= 0.65:
         label = 'Likely AI'
-    elif probability <= 0.35:
+    elif probability <= 0.3:
         label = 'Likely Human'
     else:
         label = 'Unclear'
