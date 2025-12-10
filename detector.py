@@ -154,12 +154,12 @@ def detect_ai(text: str, use_gpt2: bool = True) -> Dict[str, Any]:
         ppx_score = (200.0 - p) / 200.0  # p=200 -> 0
         ppx_score = max(-1.0, min(1.0, ppx_score))
         ppx_score = (ppx_score + 1) / 2.0  # normalize to 0..1
-        score_parts.append(('ppx', ppx_score, 0.45))
+        score_parts.append(('ppx', ppx_score, 0.35))
 
     # repetition: higher repetition -> more likely AI
     rep = features['rep_rate']
     rep_score = min(1.0, rep * 5.0)
-    score_parts.append(('rep', rep_score, 0.12))
+    score_parts.append(('rep', rep_score, 0.25))
 
     # short sentences & short word ratio: AI sometimes has more uniform short words
     short_ratio = features['short_word_ratio']
@@ -176,17 +176,17 @@ def detect_ai(text: str, use_gpt2: bool = True) -> Dict[str, Any]:
     ttr = features['type_token_ratio']
     ttr_score = max(0.0, (0.5 - ttr) / 0.5)
     ttr_score = min(1.0, ttr_score)
-    score_parts.append(('type_token', ttr_score, 0.12))
+    score_parts.append(('type_token', ttr_score, 0.15))
 
     # uppercase ratio: lots of caps -> more human/editorial
     upper = features['uppercase_ratio']
-    upper_score = max(0.0, 1.0 - min(upper / 0.1, 1.0))
+    upper_score = max(0.0, 1.0 - min(upper / 0.08, 1.0))
     score_parts.append(('uppercase', upper_score, 0.05))
 
     # sentence length variance: low variance can indicate templated generations
     sent_std = features['sentence_len_std']
     std_score = max(0.0, 1.0 - min(sent_std / 25.0, 1.0))
-    score_parts.append(('sent_len_std', std_score, 0.05))
+    score_parts.append(('sent_len_std', std_score, 0.08))
 
     # average word length: very short average can correlate with simpler generated text
     avg_word_len = features['avg_word_len']
@@ -200,21 +200,35 @@ def detect_ai(text: str, use_gpt2: bool = True) -> Dict[str, Any]:
         combined += s * w
     combined = combined / max(1e-9, total_weight)
 
-    # Adjust probability: lightly penalize short text but also add a small bias to avoid all scores clustering low.
+    # Adjust probability: lightly penalize short text, reward longer context slightly.
     probability = float(max(0.0, min(1.0, combined)))
     if features['num_words'] < 20:
-        probability *= 0.85
+        probability *= 0.8
     elif features['num_words'] < 40:
-        probability *= 0.93
-    elif features['num_words'] > 60:
+        probability *= 0.9
+    elif features['num_words'] > 80:
         probability *= 1.05
 
-    # calibration bias to lift mid-scores for AI-ish stylistic patterns
-    probability = min(1.0, 0.3 + probability * 0.9)
+    # Heuristic boosts for patterns commonly seen in templated AI outputs
+    bias = 0.0
+    if features['rep_rate'] > 0.25 and features['type_token_ratio'] < 0.6:
+        bias += 0.12
+    if features['sentence_len_std'] < 5.0 and features['avg_sentence_len'] > 10:
+        bias += 0.15
 
-    if probability >= 0.65:
+    # Penalties for more human-like richness (diverse vocab, heavier punctuation)
+    penalty = 0.0
+    if features['type_token_ratio'] > 0.7:
+        penalty += 0.08
+    if features['punct_ratio'] > 0.03:
+        penalty += 0.05
+
+    # calibration bias to avoid clustering near 0.5
+    probability = min(1.0, max(0.0, 0.2 + probability * 0.9 + bias - penalty))
+
+    if probability >= 0.7:
         label = 'Likely AI'
-    elif probability <= 0.3:
+    elif probability <= 0.5:
         label = 'Likely Human'
     else:
         label = 'Unclear'
